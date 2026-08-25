@@ -64,3 +64,28 @@ class MembershipResponse(BaseModel):
     user_id: UUID
     organization_id: UUID
     role: Literal["owner", "member"]
+
+
+class MemberInvite(BaseModel):
+    """Payload used to add an existing user to an organization."""
+
+    email: str
+    role: Literal["owner", "member"] = "member"
+
+
+class ProjectCreate(BaseModel):
+    """Payload used to create a project."""
+
+    name: str
+    key: str
+
+
+class ProjectResponse(BaseModel):
+    """Project representation returned by the API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    organization_id: UUID
+    name: str
+    key: str
