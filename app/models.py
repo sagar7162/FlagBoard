@@ -53,6 +53,9 @@ class Organization(Base):
     memberships: Mapped[list["Membership"]] = relationship(
         back_populates="organization", cascade="all, delete-orphan"
     )
+    projects: Mapped[list["Project"]] = relationship(
+        back_populates="organization", cascade="all, delete-orphan"
+    )
 
 
 class Membership(Base):
@@ -77,3 +80,21 @@ class Membership(Base):
 
     user: Mapped[User] = relationship(back_populates="memberships")
     organization: Mapped[Organization] = relationship(back_populates="memberships")
+
+
+class Project(Base):
+    """A project containing an organization's feature flags."""
+
+    __tablename__ = "project"
+    __table_args__ = (UniqueConstraint("organization_id", "key"),)
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    organization_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("organization.id"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    key: Mapped[str] = mapped_column(String, nullable=False)
+
+    organization: Mapped[Organization] = relationship(back_populates="projects")
