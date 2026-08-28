@@ -89,3 +89,30 @@ class ProjectResponse(BaseModel):
     organization_id: UUID
     name: str
     key: str
+
+
+class FlagCreate(BaseModel):
+    """Payload used to create a boolean feature flag."""
+
+    key: str
+    name: str
+
+
+class FlagToggle(BaseModel):
+    """Payload used to enable or disable a flag in one environment."""
+
+    enabled: bool
+
+
+class FlagRolloutUpdate(BaseModel):
+    """Payload used to update a percentage rollout."""
+
+    percentage: int
+
+
+class FlagRuleUpdate(BaseModel):
+    """The single targeting rule supported by v1."""
+
+    attribute: str
+    operator: Literal["equals"]
+    value: str
