@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserCreate(BaseModel):
@@ -131,3 +131,24 @@ class FlagResponse(BaseModel):
     off_value: bool
     created_by: UUID
     created_at: datetime
+
+
+class EvaluationUser(BaseModel):
+    """Client user identity and attributes used during evaluation."""
+
+    key: str
+    attributes: dict[str, object] = Field(default_factory=dict)
+
+
+class EvaluationRequest(BaseModel):
+    """Payload submitted to the flag evaluation endpoint."""
+
+    user: EvaluationUser
+
+
+class EvaluationResponse(BaseModel):
+    """Resolved flag value and evaluation reason."""
+
+    flag_key: str
+    value: bool
+    reason: str
