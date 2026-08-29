@@ -56,6 +56,9 @@ class Organization(Base):
     projects: Mapped[list["Project"]] = relationship(
         back_populates="organization", cascade="all, delete-orphan"
     )
+    api_keys: Mapped[list["ApiKey"]] = relationship(
+        back_populates="organization", cascade="all, delete-orphan"
+    )
 
 
 class Membership(Base):
@@ -174,3 +177,27 @@ class FlagEnvironmentConfig(Base):
     )
 
     flag: Mapped[Flag] = relationship(back_populates="environment_configs")
+
+
+class ApiKey(Base):
+    """An environment-scoped API key for flag evaluation."""
+
+    __tablename__ = "api_key"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    organization_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("organization.id"), nullable=False
+    )
+    environment: Mapped[str] = mapped_column(String, nullable=False)
+    hashed_key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    organization: Mapped[Organization] = relationship(back_populates="api_keys")
