@@ -116,3 +116,18 @@ class FlagRuleUpdate(BaseModel):
     attribute: str
     operator: Literal["equals"]
     value: str
+
+
+class FlagResponse(BaseModel):
+    """Flag representation returned by the API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    project_id: UUID
+    key: str
+    name: str
+    on_value: bool
+    off_value: bool
+    created_by: UUID
+    created_at: datetime
