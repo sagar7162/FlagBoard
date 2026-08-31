@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_api_key_context
+from app.cache import cache
 from app.database import get_db
 from app.models import ApiKey
 from app.schemas import EvaluationRequest, EvaluationResponse
@@ -22,4 +23,4 @@ def evaluate_flag(
 ) -> EvaluationResponse:
     """Evaluate a flag for a user in the API key's environment."""
 
-    return EvaluationService.evaluate(db, api_key, flag_key, request.user)
+    return EvaluationService.evaluate(db, api_key, flag_key, request.user, cache)

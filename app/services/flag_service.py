@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.cache import cache
 from app.models import (
     Flag,
     FlagEnvironmentConfig,
@@ -179,7 +180,7 @@ class FlagService:
 
     @staticmethod
     def _invalidate_cache(flag_id: UUID, environment: str) -> None:
-        pass
+        cache.invalidate(f"{flag_id}:{environment}")
 
     @staticmethod
     def _broadcast_update(flag: Flag, config: FlagEnvironmentConfig) -> None:

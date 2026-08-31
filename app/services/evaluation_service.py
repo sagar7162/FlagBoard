@@ -3,6 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.cache import SimpleTTLCache, cache
 from app.engine.evaluator import (
     EvalUser,
     EvaluationEngine,
@@ -18,7 +19,11 @@ class EvaluationService:
 
     @staticmethod
     def evaluate(
-        db: Session, api_key: ApiKey, flag_key: str, user: EvaluationUser
+        db: Session,
+        api_key: ApiKey,
+        flag_key: str,
+        user: EvaluationUser,
+        cache_store: SimpleTTLCache = cache,
     ) -> EvaluationResponse:
         """Evaluate a flag for the API key's organization and environment."""
 
@@ -34,19 +39,29 @@ class EvaluationService:
         if flag is None:
             return EvaluationResponse(flag_key=flag_key, value=False, reason="not_found")
 
-        config = db.scalar(
-            select(FlagEnvironmentConfig).where(
-                FlagEnvironmentConfig.flag_id == flag.id,
-                FlagEnvironmentConfig.environment == api_key.environment,
+        cache_key = f"{flag.id}:{api_key.environment}"
+        flag_config = cache_store.get(cache_key)
+        if flag_config is None:
+            config = db.scalar(
+                select(FlagEnvironmentConfig).where(
+                    FlagEnvironmentConfig.flag_id == flag.id,
+                    FlagEnvironmentConfig.environment == api_key.environment,
+                )
             )
-        )
-        if config is None:
-            return EvaluationResponse(
-                flag_key=flag_key, value=flag.off_value, reason="not_found"
-            )
+            if config is None:
+                return EvaluationResponse(
+                    flag_key=flag_key, value=flag.off_value, reason="not_found"
+                )
+
+            try:
+                flag_config = EvaluationService._to_flag_config(flag, config)
+            except (AttributeError, TypeError, ValueError):
+                return EvaluationResponse(
+                    flag_key=flag_key, value=flag.off_value, reason="evaluation_error"
+                )
+            cache_store.set(cache_key, flag_config)
 
         try:
-            flag_config = EvaluationService._to_flag_config(flag, config)
             result = EvaluationEngine().evaluate(
                 flag_config,
                 EvalUser(key=user.key, attributes=user.attributes),
