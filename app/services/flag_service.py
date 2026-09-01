@@ -1,5 +1,6 @@
 """Feature-flag creation and environment configuration business logic."""
 
+import asyncio
 from uuid import UUID
 
 from sqlalchemy import select
@@ -7,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.cache import cache
+from app.realtime import connection_manager
 from app.models import (
     Flag,
     FlagEnvironmentConfig,
@@ -184,4 +186,28 @@ class FlagService:
 
     @staticmethod
     def _broadcast_update(flag: Flag, config: FlagEnvironmentConfig) -> None:
-        pass
+        if flag.project is None:
+            return
+
+        organization_id = str(flag.project.organization_id)
+        message = {
+            "type": "flag_updated",
+            "flag_id": str(flag.id),
+            "environment": config.environment,
+            "enabled": config.enabled,
+            "rollout_percentage": config.rollout_percentage,
+        }
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            try:
+                from anyio import from_thread
+
+                from_thread.run(
+                    connection_manager.broadcast, organization_id, message
+                )
+            except RuntimeError:
+                asyncio.run(connection_manager.broadcast(organization_id, message))
+        else:
+            loop.create_task(connection_manager.broadcast(organization_id, message))
