@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    JSON,
     String,
     UniqueConstraint,
     func,
@@ -57,6 +58,9 @@ class Organization(Base):
         back_populates="organization", cascade="all, delete-orphan"
     )
     api_keys: Mapped[list["ApiKey"]] = relationship(
+        back_populates="organization", cascade="all, delete-orphan"
+    )
+    audit_log_entries: Mapped[list["AuditLogEntry"]] = relationship(
         back_populates="organization", cascade="all, delete-orphan"
     )
 
@@ -137,6 +141,9 @@ class Flag(Base):
     environment_configs: Mapped[list["FlagEnvironmentConfig"]] = relationship(
         back_populates="flag", cascade="all, delete-orphan"
     )
+    audit_log_entries: Mapped[list["AuditLogEntry"]] = relationship(
+        back_populates="flag", cascade="all, delete-orphan"
+    )
 
 
 class FlagEnvironmentConfig(Base):
@@ -201,3 +208,33 @@ class ApiKey(Base):
     )
 
     organization: Mapped[Organization] = relationship(back_populates="api_keys")
+
+
+class AuditLogEntry(Base):
+    """Record of a change made to a feature flag."""
+
+    __tablename__ = "audit_log_entry"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    organization_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("organization.id"), nullable=False
+    )
+    flag_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("flag.id"), nullable=False
+    )
+    actor_user_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("user.id"), nullable=False
+    )
+    action: Mapped[str] = mapped_column(String, nullable=False)
+    before: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    after: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    organization: Mapped[Organization] = relationship(
+        back_populates="audit_log_entries"
+    )
+    flag: Mapped[Flag] = relationship(back_populates="audit_log_entries")
