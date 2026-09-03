@@ -133,6 +133,21 @@ class FlagResponse(BaseModel):
     created_at: datetime
 
 
+class AuditLogResponse(BaseModel):
+    """A flag mutation entry returned by the audit-log endpoint."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    organization_id: UUID
+    flag_id: UUID
+    actor_user_id: UUID
+    action: str
+    before: dict[str, object] | None
+    after: dict[str, object] | None
+    created_at: datetime
+
+
 class EvaluationUser(BaseModel):
     """Client user identity and attributes used during evaluation."""
 

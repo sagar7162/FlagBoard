@@ -10,12 +10,14 @@ from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.models import Flag, User
 from app.schemas import (
+    AuditLogResponse,
     FlagCreate,
     FlagResponse,
     FlagRolloutUpdate,
     FlagRuleUpdate,
     FlagToggle,
 )
+from app.services.audit_service import AuditService
 from app.services.flag_service import FlagService
 
 
@@ -40,6 +42,27 @@ def create_flag(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.get("/flags/{flag_id}/audit-log", response_model=list[AuditLogResponse])
+def get_audit_log(
+    flag_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[AuditLogResponse]:
+    """Return the chronological audit history for a flag."""
+
+    try:
+        flag = FlagService.get_flag(db, current_user, flag_id)
+        return AuditService.list_for_flag(
+            db,
+            organization_id=flag.project.organization_id,
+            flag_id=flag.id,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.patch(
