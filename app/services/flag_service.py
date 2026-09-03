@@ -17,6 +17,7 @@ from app.models import (
     User,
 )
 from app.schemas import FlagCreate, FlagRuleUpdate
+from app.services.audit_service import AuditService
 
 
 ENVIRONMENTS = ("development", "staging", "production")
@@ -24,6 +25,21 @@ ENVIRONMENTS = ("development", "staging", "production")
 
 class FlagService:
     """Handle flag mutations and their organization authorization checks."""
+
+    @staticmethod
+    def get_flag(db: Session, user: User, flag_id: UUID) -> Flag:
+        """Return a flag after confirming the user belongs to its organization."""
+
+        flag = db.scalar(
+            select(Flag)
+            .options(joinedload(Flag.project))
+            .where(Flag.id == flag_id)
+        )
+        if flag is None:
+            raise LookupError("Flag not found")
+
+        FlagService._require_member(db, user, flag.project.organization_id)
+        return flag
 
     @staticmethod
     def create_flag(
@@ -57,9 +73,24 @@ class FlagService:
 
         try:
             db.flush()
-            db.add_all(
+            configs = [
                 FlagEnvironmentConfig(flag_id=flag.id, environment=environment)
                 for environment in ENVIRONMENTS
+            ]
+            db.add_all(configs)
+            db.flush()
+            AuditService.record(
+                db,
+                organization_id=project.organization_id,
+                flag_id=flag.id,
+                actor_user_id=user.id,
+                action="flag_created",
+                after={
+                    "flag": FlagService._flag_snapshot(flag),
+                    "environments": [
+                        FlagService._config_snapshot(config) for config in configs
+                    ],
+                },
             )
             db.commit()
         except IntegrityError as exc:
@@ -78,7 +109,17 @@ class FlagService:
         flag, config = FlagService._get_flag_and_config(
             db, user, flag_id, environment
         )
+        before = FlagService._config_snapshot(config)
         config.enabled = enabled
+        AuditService.record(
+            db,
+            organization_id=flag.project.organization_id,
+            flag_id=flag.id,
+            actor_user_id=user.id,
+            action="flag_toggled",
+            before=before,
+            after=FlagService._config_snapshot(config),
+        )
         db.commit()
         db.refresh(flag)
         FlagService._after_config_update(flag, config)
@@ -96,7 +137,17 @@ class FlagService:
         flag, config = FlagService._get_flag_and_config(
             db, user, flag_id, environment
         )
+        before = FlagService._config_snapshot(config)
         config.rollout_percentage = percentage
+        AuditService.record(
+            db,
+            organization_id=flag.project.organization_id,
+            flag_id=flag.id,
+            actor_user_id=user.id,
+            action="rollout_updated",
+            before=before,
+            after=FlagService._config_snapshot(config),
+        )
         db.commit()
         db.refresh(flag)
         FlagService._after_config_update(flag, config)
@@ -115,6 +166,7 @@ class FlagService:
         flag, config = FlagService._get_flag_and_config(
             db, user, flag_id, environment
         )
+        before = FlagService._config_snapshot(config)
         if rule is None:
             config.rule_attribute = None
             config.rule_operator = None
@@ -128,6 +180,15 @@ class FlagService:
             config.rule_operator = rule.operator
             config.rule_value = value
 
+        AuditService.record(
+            db,
+            organization_id=flag.project.organization_id,
+            flag_id=flag.id,
+            actor_user_id=user.id,
+            action="rule_updated",
+            before=before,
+            after=FlagService._config_snapshot(config),
+        )
         db.commit()
         db.refresh(flag)
         FlagService._after_config_update(flag, config)
@@ -170,6 +231,33 @@ class FlagService:
         if membership is None:
             raise PermissionError("User is not a member of this organization")
         return membership
+
+    @staticmethod
+    def _flag_snapshot(flag: Flag) -> dict:
+        """Return JSON-safe flag fields for audit history."""
+
+        return {
+            "id": str(flag.id),
+            "project_id": str(flag.project_id),
+            "key": flag.key,
+            "name": flag.name,
+            "on_value": flag.on_value,
+            "off_value": flag.off_value,
+            "created_by": str(flag.created_by),
+        }
+
+    @staticmethod
+    def _config_snapshot(config: FlagEnvironmentConfig) -> dict:
+        """Return JSON-safe environment settings for audit history."""
+
+        return {
+            "environment": config.environment,
+            "enabled": config.enabled,
+            "rollout_percentage": config.rollout_percentage,
+            "rule_attribute": config.rule_attribute,
+            "rule_operator": config.rule_operator,
+            "rule_value": config.rule_value,
+        }
 
     @staticmethod
     def _after_config_update(

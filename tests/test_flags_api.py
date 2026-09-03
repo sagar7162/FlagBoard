@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from app.models import (
     ApiKey,
+    AuditLogEntry,
     Flag,
     FlagEnvironmentConfig,
     Membership,
@@ -100,10 +101,18 @@ class FlagsApiTests(unittest.TestCase):
         flag.on_value = True
         flag.off_value = False
         self.assertEqual(flag.key, "checkout")
+        configs = [
+            value for value in create_db.added if isinstance(value, FlagEnvironmentConfig)
+        ]
         self.assertEqual(
-            {config.environment for config in create_db.added[1:]},
+            {config.environment for config in configs},
             {"development", "staging", "production"},
         )
+        audit_entries = [
+            value for value in create_db.added if isinstance(value, AuditLogEntry)
+        ]
+        self.assertEqual(len(audit_entries), 1)
+        self.assertEqual(audit_entries[0].action, "flag_created")
 
         flag.project = self.project
         config = FlagEnvironmentConfig(
