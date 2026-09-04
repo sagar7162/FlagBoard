@@ -55,6 +55,20 @@ def invite_member(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
+@router.get("/{organization_id}/projects", response_model=list[ProjectResponse])
+def list_projects(
+    organization_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[Project]:
+    """Return projects for an organization member."""
+
+    try:
+        return OrgService.list_projects(db, current_user, organization_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+
 @router.post("/{organization_id}/projects", response_model=ProjectResponse)
 def create_project(
     organization_id: UUID,
