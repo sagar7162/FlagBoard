@@ -55,6 +55,32 @@ class OrganizationResponse(BaseModel):
     created_at: datetime
 
 
+class ApiKeyCreate(BaseModel):
+    """Payload used to create an environment-scoped evaluation key."""
+
+    environment: Literal["development", "staging", "production"]
+
+
+class ApiKeyCreateResponse(BaseModel):
+    """API key returned once at creation time, including its raw secret."""
+
+    id: UUID
+    key_prefix: str
+    raw_key: str
+
+
+class ApiKeyResponse(BaseModel):
+    """Public API key metadata; never includes the raw secret."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    key_prefix: str
+    environment: Literal["development", "staging", "production"]
+    created_at: datetime
+    revoked_at: datetime | None
+
+
 class MembershipResponse(BaseModel):
     """Organization membership representation returned by the API."""
 
