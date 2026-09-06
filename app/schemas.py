@@ -118,6 +118,20 @@ class FlagRuleUpdate(BaseModel):
     value: str
 
 
+class EnvironmentConfigResponse(BaseModel):
+    """One environment's settings for a feature flag."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    environment: str
+    enabled: bool
+    rollout_percentage: int | None
+    rule_attribute: str | None
+    rule_operator: str | None
+    rule_value: str | None
+    updated_at: datetime
+
+
 class FlagResponse(BaseModel):
     """Flag representation returned by the API."""
 
@@ -127,10 +141,10 @@ class FlagResponse(BaseModel):
     project_id: UUID
     key: str
     name: str
-    on_value: bool
-    off_value: bool
-    created_by: UUID
     created_at: datetime
+    environments: list[EnvironmentConfigResponse] = Field(
+        validation_alias="environment_configs"
+    )
 
 
 class AuditLogResponse(BaseModel):

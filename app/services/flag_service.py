@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.cache import cache
 from app.realtime import connection_manager
@@ -25,6 +25,24 @@ ENVIRONMENTS = ("development", "staging", "production")
 
 class FlagService:
     """Handle flag mutations and their organization authorization checks."""
+
+    @staticmethod
+    def list_flags(db: Session, user: User, project_id: UUID) -> list[Flag]:
+        """Return flags for a project after confirming organization membership."""
+
+        project = db.get(Project, project_id)
+        if project is None:
+            raise LookupError("Project not found")
+
+        FlagService._require_member(db, user, project.organization_id)
+        return list(
+            db.scalars(
+                select(Flag)
+                .options(selectinload(Flag.environment_configs))
+                .where(Flag.project_id == project_id)
+                .order_by(Flag.key)
+            ).all()
+        )
 
     @staticmethod
     def get_flag(db: Session, user: User, flag_id: UUID) -> Flag:

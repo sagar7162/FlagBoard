@@ -25,6 +25,22 @@ router = APIRouter(tags=["flags"])
 Environment = Annotated[str, "development, staging, or production"]
 
 
+@router.get("/projects/{project_id}/flags", response_model=list[FlagResponse])
+def list_flags(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[Flag]:
+    """Return flags for a project organization member."""
+
+    try:
+        return FlagService.list_flags(db, current_user, project_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
 @router.post("/projects/{project_id}/flags", response_model=FlagResponse)
 def create_flag(
     project_id: UUID,
@@ -42,6 +58,20 @@ def create_flag(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.get("/flags/{flag_id}", response_model=FlagResponse)
+def get_flag(
+    flag_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Flag:
+    """Return a flag visible to a member of its organization."""
+
+    try:
+        return FlagService.get_flag(db, current_user, flag_id)
+    except (LookupError, PermissionError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flag not found") from exc
 
 
 @router.get("/flags/{flag_id}/audit-log", response_model=list[AuditLogResponse])
