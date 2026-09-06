@@ -15,6 +15,19 @@ class OrgService:
     """Handle tenant and project operations with membership authorization."""
 
     @staticmethod
+    def list_organizations(db: Session, user: User) -> list[Organization]:
+        """Return organizations where the user has a membership."""
+
+        return list(
+            db.scalars(
+                select(Organization)
+                .join(Membership)
+                .where(Membership.user_id == user.id)
+                .order_by(Organization.name)
+            ).all()
+        )
+
+    @staticmethod
     def create_organization(
         db: Session, user: User, organization_data: OrganizationCreate
     ) -> Organization:

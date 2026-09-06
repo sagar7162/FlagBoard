@@ -22,6 +22,16 @@ from app.services.org_service import OrgService
 router = APIRouter(prefix="/orgs", tags=["organizations"])
 
 
+@router.get("", response_model=list[OrganizationResponse])
+def list_organizations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[Organization]:
+    """Return organizations where the authenticated user is a member."""
+
+    return OrgService.list_organizations(db, current_user)
+
+
 @router.post("", response_model=OrganizationResponse)
 def create_organization(
     organization_data: OrganizationCreate,
