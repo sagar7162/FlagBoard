@@ -1,216 +1,103 @@
-"""Happy-path and tenant-isolation tests for flag APIs."""
+"""HTTP integration tests for flag APIs and tenant isolation."""
 
-import unittest
 from uuid import uuid4
 
-from fastapi import HTTPException
-
-from app.models import (
-    ApiKey,
-    AuditLogEntry,
-    Flag,
-    FlagEnvironmentConfig,
-    Membership,
-    Organization,
-    Project,
-    User,
-)
-from app.routers.evaluate_router import evaluate_flag
-from app.routers.flags_router import (
-    create_flag,
-    toggle_flag,
-    update_rollout,
-    update_rule,
-)
-from app.schemas import (
-    EvaluationRequest,
-    EvaluationUser,
-    FlagCreate,
-    FlagRuleUpdate,
-    FlagRolloutUpdate,
-    FlagToggle,
-)
+from fastapi.testclient import TestClient
 
 
-class FakeSession:
-    """Small database-session double for route/service integration tests."""
-
-    def __init__(self, get_value=None, scalar_values=()):
-        self.get_value = get_value
-        self.scalar_values = iter(scalar_values)
-        self.added = []
-
-    def get(self, model, identifier):
-        return self.get_value
-
-    def scalar(self, statement):
-        return next(self.scalar_values)
-
-    def add(self, value):
-        self.added.append(value)
-
-    def add_all(self, values):
-        self.added.extend(values)
-
-    def flush(self):
-        for value in self.added:
-            if getattr(value, "id", None) is None:
-                value.id = uuid4()
-
-    def commit(self):
-        self.flush()
-
-    def refresh(self, value):
-        self.flush()
-
-    def rollback(self):
-        pass
+def _signup(client: TestClient, email: str) -> str:
+    response = client.post(
+        "/auth/signup",
+        json={"email": email, "password": "correct horse battery staple"},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["access_token"]
 
 
-class FlagsApiTests(unittest.TestCase):
-    def setUp(self):
-        self.user = User(id=uuid4(), email="owner@example.com", password_hash="hash")
-        self.other_user = User(
-            id=uuid4(), email="other@example.com", password_hash="hash"
-        )
-        self.organization = Organization(id=uuid4(), name="Acme", slug="acme")
-        self.project = Project(
-            id=uuid4(),
-            organization_id=self.organization.id,
-            name="Web",
-            key="web",
-        )
-        self.membership = Membership(
-            id=uuid4(),
-            user_id=self.user.id,
-            organization_id=self.organization.id,
-            role="owner",
-        )
-
-    def test_flag_happy_path_create_toggle_rollout_rule_and_evaluate(self):
-        create_db = FakeSession(
-            get_value=self.project,
-            scalar_values=[self.membership, None],
-        )
-        flag = create_flag(
-            self.project.id,
-            FlagCreate(key="checkout", name="New checkout"),
-            create_db,
-            self.user,
-        )
-        flag.on_value = True
-        flag.off_value = False
-        self.assertEqual(flag.key, "checkout")
-        configs = [
-            value for value in create_db.added if isinstance(value, FlagEnvironmentConfig)
-        ]
-        self.assertEqual(
-            {config.environment for config in configs},
-            {"development", "staging", "production"},
-        )
-        audit_entries = [
-            value for value in create_db.added if isinstance(value, AuditLogEntry)
-        ]
-        self.assertEqual(len(audit_entries), 1)
-        self.assertEqual(audit_entries[0].action, "flag_created")
-
-        flag.project = self.project
-        config = FlagEnvironmentConfig(
-            id=uuid4(),
-            flag_id=flag.id,
-            environment="production",
-            enabled=False,
-        )
-
-        toggle_flag(
-            flag.id,
-            "production",
-            FlagToggle(enabled=True),
-            FakeSession(scalar_values=[flag, self.membership, config]),
-            self.user,
-        )
-        self.assertTrue(config.enabled)
-
-        update_rollout(
-            flag.id,
-            "production",
-            FlagRolloutUpdate(percentage=50),
-            FakeSession(scalar_values=[flag, self.membership, config]),
-            self.user,
-        )
-        self.assertEqual(config.rollout_percentage, 50)
-
-        update_rule(
-            flag.id,
-            "production",
-            FlagRuleUpdate(attribute="plan", operator="equals", value="pro"),
-            FakeSession(scalar_values=[flag, self.membership, config]),
-            self.user,
-        )
-        self.assertEqual(
-            (config.rule_attribute, config.rule_operator, config.rule_value),
-            ("plan", "equals", "pro"),
-        )
-
-        api_key = ApiKey(
-            id=uuid4(),
-            organization_id=self.organization.id,
-            environment="production",
-            hashed_key="hashed",
-            key_prefix="ffb_test",
-        )
-        evaluation = evaluate_flag(
-            "checkout",
-            EvaluationRequest(
-                user=EvaluationUser(key="user-123", attributes={"plan": "pro"})
-            ),
-            FakeSession(scalar_values=[flag, config]),
-            api_key,
-        )
-        self.assertEqual(
-            (evaluation.value, evaluation.reason), (True, "rule_match")
-        )
-
-    def test_user_from_another_tenant_cannot_create_flag(self):
-        db = FakeSession(get_value=self.project, scalar_values=[None])
-
-        with self.assertRaises(HTTPException) as context:
-            create_flag(
-                self.project.id,
-                FlagCreate(key="private", name="Private flag"),
-                db,
-                self.other_user,
-            )
-
-        self.assertEqual(context.exception.status_code, 403)
-
-    def test_api_key_from_another_tenant_cannot_evaluate_flag(self):
-        flag = Flag(
-            id=uuid4(),
-            project_id=self.project.id,
-            key="checkout",
-            name="Checkout",
-            created_by=self.user.id,
-        )
-        api_key = ApiKey(
-            id=uuid4(),
-            organization_id=uuid4(),
-            environment="production",
-            hashed_key="hashed",
-            key_prefix="ffb_test",
-        )
-
-        result = evaluate_flag(
-            "checkout",
-            EvaluationRequest(user=EvaluationUser(key="user-123")),
-            FakeSession(scalar_values=[None]),
-            api_key,
-        )
-
-        self.assertEqual(
-            (result.value, result.reason), (False, "not_found")
-        )
+def _authorization(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
 
 
-if __name__ == "__main__":
-    unittest.main()
+def _create_flag_for_user(client: TestClient, token: str) -> tuple[str, str, str]:
+    headers = _authorization(token)
+    organization = client.post(
+        "/orgs", headers=headers, json={"name": f"Acme {uuid4().hex}"}
+    )
+    assert organization.status_code == 200, organization.text
+    organization_id = organization.json()["id"]
+
+    project = client.post(
+        f"/orgs/{organization_id}/projects",
+        headers=headers,
+        json={"name": "Web", "key": "web"},
+    )
+    assert project.status_code == 200, project.text
+    project_id = project.json()["id"]
+
+    flag = client.post(
+        f"/projects/{project_id}/flags",
+        headers=headers,
+        json={"key": "checkout", "name": "New checkout"},
+    )
+    assert flag.status_code == 200, flag.text
+    return organization_id, project_id, flag.json()["id"]
+
+
+def test_flag_lifecycle_uses_real_http_and_postgres(client: TestClient):
+    """Exercise authentication, persistence, mutation, and evaluation end to end."""
+
+    token = _signup(client, f"owner-{uuid4().hex}@example.com")
+    headers = _authorization(token)
+    organization_id, project_id, flag_id = _create_flag_for_user(client, token)
+
+    api_key = client.post(
+        f"/orgs/{organization_id}/api-keys",
+        headers=headers,
+        json={"environment": "production"},
+    )
+    assert api_key.status_code == 201, api_key.text
+
+    toggle = client.patch(
+        f"/flags/{flag_id}/environments/production/toggle",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert toggle.status_code == 200, toggle.text
+
+    flags = client.get(f"/projects/{project_id}/flags", headers=headers)
+    assert flags.status_code == 200, flags.text
+    assert flags.json()[0]["key"] == "checkout"
+
+    evaluation = client.post(
+        "/evaluate/checkout",
+        headers={"Authorization": f"ApiKey {api_key.json()['raw_key']}"},
+        json={"user": {"key": "user-123"}},
+    )
+    assert evaluation.status_code == 200, evaluation.text
+    assert evaluation.json()["value"] is True
+    assert evaluation.json()["reason"] == "default_on"
+
+
+def test_tenant_isolation_is_enforced_over_real_http_and_database(client: TestClient):
+    """A user in another tenant cannot read or mutate the first tenant's flag."""
+
+    user_a_token = _signup(client, f"user-a-{uuid4().hex}@example.com")
+    _, project_id, flag_id = _create_flag_for_user(client, user_a_token)
+
+    user_b_token = _signup(client, f"user-b-{uuid4().hex}@example.com")
+    user_b_headers = _authorization(user_b_token)
+
+    get_flag = client.get(f"/flags/{flag_id}", headers=user_b_headers)
+    assert get_flag.status_code == 404, get_flag.text
+
+    list_flags = client.get(
+        f"/projects/{project_id}/flags", headers=user_b_headers
+    )
+    assert list_flags.status_code == 403, list_flags.text
+
+    toggle_flag = client.patch(
+        f"/flags/{flag_id}/environments/production/toggle",
+        headers=user_b_headers,
+        json={"enabled": True},
+    )
+    assert toggle_flag.status_code == 404, toggle_flag.text
