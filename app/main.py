@@ -1,7 +1,9 @@
 """FastAPI application entry point."""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
 from app.routers.auth_router import router as auth_router
 from app.routers.evaluate_router import router as evaluate_router
 from app.routers.flags_router import router as flags_router
@@ -10,6 +12,13 @@ from app.routers.ws_router import router as ws_router
 
 
 app = FastAPI(title="FlagBoard")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(auth_router)
 app.include_router(orgs_router)
 app.include_router(flags_router)
