@@ -75,13 +75,17 @@ class FlagService:
         if not key or not name:
             raise ValueError("Flag key and name cannot be empty")
 
-        existing_flag = db.scalar(
-            select(Flag).where(Flag.project_id == project_id, Flag.key == key)
-        )
+        existing_flag = db.scalars(
+            select(Flag).where(
+                Flag.organization_id == project.organization_id,
+                Flag.key == key,
+            )
+        ).first()
         if existing_flag is not None:
-            raise ValueError("Flag key already exists in this project")
+            raise ValueError("Flag key already exists in this organization")
 
         flag = Flag(
+            organization_id=project.organization_id,
             project_id=project_id,
             key=key,
             name=name,
@@ -113,7 +117,7 @@ class FlagService:
             db.commit()
         except IntegrityError as exc:
             db.rollback()
-            raise ValueError("Flag key already exists in this project") from exc
+            raise ValueError("Flag key already exists in this organization") from exc
 
         db.refresh(flag)
         return flag

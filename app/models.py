@@ -111,13 +111,16 @@ class Project(Base):
 
 
 class Flag(Base):
-    """A boolean feature flag belonging to a project."""
+    """A boolean feature flag belonging to an organization and project."""
 
     __tablename__ = "flag"
-    __table_args__ = (UniqueConstraint("project_id", "key"),)
+    __table_args__ = (UniqueConstraint("organization_id", "key"),)
 
     id: Mapped[UUID] = mapped_column(
         PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    organization_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("organization.id"), nullable=False
     )
     project_id: Mapped[UUID] = mapped_column(
         PostgreSQLUUID(as_uuid=True), ForeignKey("project.id"), nullable=False

@@ -10,7 +10,7 @@ from app.engine.evaluator import (
     FlagConfig,
     TargetingRule,
 )
-from app.models import ApiKey, Flag, FlagEnvironmentConfig, Project
+from app.models import ApiKey, Flag, FlagEnvironmentConfig
 from app.schemas import EvaluationResponse, EvaluationUser
 
 
@@ -27,15 +27,14 @@ class EvaluationService:
     ) -> EvaluationResponse:
         """Evaluate a flag for the API key's organization and environment."""
 
-        flag = db.scalar(
+        flag = db.scalars(
             select(Flag)
-            .join(Project)
             .options(joinedload(Flag.project))
             .where(
                 Flag.key == flag_key,
-                Project.organization_id == api_key.organization_id,
+                Flag.organization_id == api_key.organization_id,
             )
-        )
+        ).first()
         if flag is None:
             return EvaluationResponse(flag_key=flag_key, value=False, reason="not_found")
 

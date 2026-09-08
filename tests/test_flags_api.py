@@ -101,3 +101,40 @@ def test_tenant_isolation_is_enforced_over_real_http_and_database(client: TestCl
         json={"enabled": True},
     )
     assert toggle_flag.status_code == 404, toggle_flag.text
+
+
+def test_flag_key_is_unique_across_projects_in_one_organization(client: TestClient):
+    """Organization-scoped evaluation keys cannot address duplicate flag keys."""
+
+    token = _signup(client, f"owner-{uuid4().hex}@example.com")
+    headers = _authorization(token)
+    organization_id, _, _ = _create_flag_for_user(client, token)
+
+    second_project = client.post(
+        f"/orgs/{organization_id}/projects",
+        headers=headers,
+        json={"name": "Mobile", "key": "mobile"},
+    )
+    assert second_project.status_code == 200, second_project.text
+
+    duplicate_flag = client.post(
+        f"/projects/{second_project.json()['id']}/flags",
+        headers=headers,
+        json={"key": "checkout", "name": "Mobile checkout"},
+    )
+    assert duplicate_flag.status_code == 409, duplicate_flag.text
+
+    api_key = client.post(
+        f"/orgs/{organization_id}/api-keys",
+        headers=headers,
+        json={"environment": "production"},
+    )
+    assert api_key.status_code == 201, api_key.text
+
+    evaluation = client.post(
+        "/evaluate/checkout",
+        headers={"Authorization": f"ApiKey {api_key.json()['raw_key']}"},
+        json={"user": {"key": "user-123"}},
+    )
+    assert evaluation.status_code == 200, evaluation.text
+    assert evaluation.json()["reason"] == "default_on"
