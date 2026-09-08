@@ -67,6 +67,18 @@ class EvaluatorTests(unittest.TestCase):
 
         self.assertEqual((result.value, result.reason), (True, "default_on"))
 
+    def test_malformed_rule_operator_fails_safe(self):
+        result = self.engine.evaluate(
+            FlagConfig(
+                flag_key="checkout",
+                enabled=True,
+                rule=TargetingRule("plan", "contains", "pro"),
+            ),
+            self.user,
+        )
+
+        self.assertEqual((result.value, result.reason), (False, "evaluation_error"))
+
 
 if __name__ == "__main__":
     unittest.main()

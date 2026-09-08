@@ -1,9 +1,13 @@
 """Pure feature-flag evaluation logic."""
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from app.engine.rollout import bucket_for
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -52,8 +56,17 @@ class EvaluationEngine:
         if not flag_config.enabled:
             return EvaluationResult(flag_config.off_value, "flag_disabled")
 
-        if self._rule_matches(flag_config.rule, user):
-            return EvaluationResult(flag_config.on_value, "rule_match")
+        if flag_config.rule is not None:
+            if flag_config.rule.operator != "equals":
+                logger.warning(
+                    "Malformed targeting rule operator for flag %s: %r",
+                    flag_config.flag_key,
+                    flag_config.rule.operator,
+                )
+                return EvaluationResult(flag_config.off_value, "evaluation_error")
+
+            if self._rule_matches(flag_config.rule, user):
+                return EvaluationResult(flag_config.on_value, "rule_match")
 
         if flag_config.rollout_percentage is not None:
             bucket = bucket_for(flag_config.flag_key, user.key)
@@ -65,7 +78,7 @@ class EvaluationEngine:
 
     @staticmethod
     def _rule_matches(rule: TargetingRule | None, user: EvalUser) -> bool:
-        if rule is None or rule.operator != "equals":
+        if rule is None:
             return False
 
         attribute_value = user.attributes.get(rule.attribute)
