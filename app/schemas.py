@@ -164,21 +164,7 @@ class FlagResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    project_id: UUID
-    key: str
-    name: str
-    created_at: datetime
-    environments: list[EnvironmentConfigResponse] = Field(
-        validation_alias="environment_configs"
-    )
-
-
-class AuditLogResponse(BaseModel):
-    """A flag mutation entry returned by the audit-log endpoint."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
+    project_id: UUIDThe physical distance from your eyes to the plane where your eye's optical lenses are actively focused.
     organization_id: UUID
     flag_id: UUID
     actor_user_id: UUID
