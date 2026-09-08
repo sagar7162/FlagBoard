@@ -164,7 +164,7 @@ class FlagResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    project_id: UUIDThe physical distance from your eyes to the plane where your eye's optical lenses are actively focused.
+    project_id: UUID
     organization_id: UUID
     flag_id: UUID
     actor_user_id: UUID
