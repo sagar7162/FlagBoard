@@ -4,11 +4,12 @@ import secrets
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import hash_api_key
 from app.models import ApiKey, Membership, User
+from app.repositories.api_key_repository import ApiKeyRepository
+from app.repositories.org_repository import OrgRepository
 
 
 class ApiKeyService:
@@ -28,9 +29,7 @@ class ApiKeyService:
             hashed_key=hash_api_key(raw_key),
             key_prefix=raw_key[:12],
         )
-        db.add(api_key)
-        db.commit()
-        db.refresh(api_key)
+        ApiKeyRepository.save(db, api_key)
         return api_key, raw_key
 
     @staticmethod
@@ -40,13 +39,7 @@ class ApiKeyService:
         """List API-key metadata for any organization member."""
 
         ApiKeyService._require_member(db, actor, organization_id)
-        return list(
-            db.scalars(
-                select(ApiKey)
-                .where(ApiKey.organization_id == organization_id)
-                .order_by(ApiKey.created_at)
-            ).all()
-        )
+        return ApiKeyRepository.list_for_organization(db, organization_id)
 
     @staticmethod
     def revoke(
@@ -55,27 +48,19 @@ class ApiKeyService:
         """Revoke an API key without deleting its database record."""
 
         ApiKeyService._require_owner(db, actor, organization_id)
-        api_key = db.scalar(
-            select(ApiKey).where(
-                ApiKey.id == api_key_id,
-                ApiKey.organization_id == organization_id,
-            )
+        api_key = ApiKeyRepository.get_for_organization(
+            db, api_key_id, organization_id
         )
         if api_key is None:
             raise LookupError("API key not found")
 
         if api_key.revoked_at is None:
             api_key.revoked_at = datetime.now(timezone.utc)
-            db.commit()
+            ApiKeyRepository.commit(db)
 
     @staticmethod
     def _require_member(db: Session, user: User, organization_id: UUID) -> Membership:
-        membership = db.scalar(
-            select(Membership).where(
-                Membership.user_id == user.id,
-                Membership.organization_id == organization_id,
-            )
-        )
+        membership = OrgRepository.get_membership(db, user.id, organization_id)
         if membership is None:
             raise PermissionError("User is not a member of this organization")
         return membership

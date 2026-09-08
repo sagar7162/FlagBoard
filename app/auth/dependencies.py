@@ -8,13 +8,14 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.security import verify_access_token
 from app.config import settings
 from app.database import get_db
 from app.models import ApiKey, User
+from app.repositories.api_key_repository import ApiKeyRepository
+from app.repositories.user_repository import UserRepository
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -45,7 +46,7 @@ def get_current_user(
     except (TypeError, ValueError):
         raise _unauthorized() from None
 
-    user = db.get(User, user_id)
+    user = UserRepository.get_by_id(db, user_id)
     if user is None:
         raise _unauthorized()
 
@@ -75,11 +76,8 @@ def get_api_key_context(
     if scheme.lower() != "apikey" or not raw_key.strip():
         raise _api_key_unauthorized()
 
-    api_key = db.scalar(
-        select(ApiKey).where(
-            ApiKey.hashed_key == hash_api_key(raw_key.strip()),
-            ApiKey.revoked_at.is_(None),
-        )
+    api_key = ApiKeyRepository.get_active_by_hash(
+        db, hash_api_key(raw_key.strip())
     )
     if api_key is None:
         raise _api_key_unauthorized()

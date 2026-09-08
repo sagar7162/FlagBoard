@@ -1,7 +1,6 @@
 """Database-backed flag evaluation orchestration."""
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.cache import SimpleTTLCache, cache
 from app.engine.evaluator import (
@@ -11,6 +10,8 @@ from app.engine.evaluator import (
     TargetingRule,
 )
 from app.models import ApiKey, Flag, FlagEnvironmentConfig
+from app.repositories.evaluation_repository import EvaluationRepository
+from app.repositories.flag_repository import FlagRepository
 from app.schemas import EvaluationResponse, EvaluationUser
 
 
@@ -27,25 +28,17 @@ class EvaluationService:
     ) -> EvaluationResponse:
         """Evaluate a flag for the API key's organization and environment."""
 
-        flag = db.scalars(
-            select(Flag)
-            .options(joinedload(Flag.project))
-            .where(
-                Flag.key == flag_key,
-                Flag.organization_id == api_key.organization_id,
-            )
-        ).first()
+        flag = FlagRepository.get_by_organization_and_key(
+            db, api_key.organization_id, flag_key
+        )
         if flag is None:
             return EvaluationResponse(flag_key=flag_key, value=False, reason="not_found")
 
         cache_key = f"{flag.id}:{api_key.environment}"
         flag_config = cache_store.get(cache_key)
         if flag_config is None:
-            config = db.scalar(
-                select(FlagEnvironmentConfig).where(
-                    FlagEnvironmentConfig.flag_id == flag.id,
-                    FlagEnvironmentConfig.environment == api_key.environment,
-                )
+            config = EvaluationRepository.get_config(
+                db, flag.id, api_key.environment
             )
             if config is None:
                 return EvaluationResponse(

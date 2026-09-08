@@ -3,9 +3,8 @@
 import asyncio
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session
 
 from app.cache import cache
 from app.realtime import connection_manager
@@ -13,9 +12,10 @@ from app.models import (
     Flag,
     FlagEnvironmentConfig,
     Membership,
-    Project,
     User,
 )
+from app.repositories.flag_repository import FlagRepository
+from app.repositories.org_repository import OrgRepository
 from app.schemas import FlagCreate, FlagRuleUpdate
 from app.services.audit_service import AuditService
 
@@ -30,29 +30,18 @@ class FlagService:
     def list_flags(db: Session, user: User, project_id: UUID) -> list[Flag]:
         """Return flags for a project after confirming organization membership."""
 
-        project = db.get(Project, project_id)
+        project = FlagRepository.get_project(db, project_id)
         if project is None:
             raise LookupError("Project not found")
 
         FlagService._require_member(db, user, project.organization_id)
-        return list(
-            db.scalars(
-                select(Flag)
-                .options(selectinload(Flag.environment_configs))
-                .where(Flag.project_id == project_id)
-                .order_by(Flag.key)
-            ).all()
-        )
+        return FlagRepository.list_for_project(db, project_id)
 
     @staticmethod
     def get_flag(db: Session, user: User, flag_id: UUID) -> Flag:
         """Return a flag after confirming the user belongs to its organization."""
 
-        flag = db.scalar(
-            select(Flag)
-            .options(joinedload(Flag.project))
-            .where(Flag.id == flag_id)
-        )
+        flag = FlagRepository.get(db, flag_id)
         if flag is None:
             raise LookupError("Flag not found")
 
@@ -65,7 +54,7 @@ class FlagService:
     ) -> Flag:
         """Create a flag and its default configuration rows."""
 
-        project = db.get(Project, project_id)
+        project = FlagRepository.get_project(db, project_id)
         if project is None:
             raise LookupError("Project not found")
         FlagService._require_member(db, user, project.organization_id)
@@ -75,12 +64,9 @@ class FlagService:
         if not key or not name:
             raise ValueError("Flag key and name cannot be empty")
 
-        existing_flag = db.scalars(
-            select(Flag).where(
-                Flag.organization_id == project.organization_id,
-                Flag.key == key,
-            )
-        ).first()
+        existing_flag = FlagRepository.get_by_organization_and_key(
+            db, project.organization_id, key
+        )
         if existing_flag is not None:
             raise ValueError("Flag key already exists in this organization")
 
@@ -91,16 +77,15 @@ class FlagService:
             name=name,
             created_by=user.id,
         )
-        db.add(flag)
-
         try:
-            db.flush()
+            FlagRepository.add_flag(db, flag)
+            FlagRepository.flush(db)
             configs = [
                 FlagEnvironmentConfig(flag_id=flag.id, environment=environment)
                 for environment in ENVIRONMENTS
             ]
-            db.add_all(configs)
-            db.flush()
+            FlagRepository.add_configs(db, configs)
+            FlagRepository.flush(db)
             AuditService.record(
                 db,
                 organization_id=project.organization_id,
@@ -114,12 +99,12 @@ class FlagService:
                     ],
                 },
             )
-            db.commit()
+            FlagRepository.commit(db)
         except IntegrityError as exc:
-            db.rollback()
+            FlagRepository.rollback(db)
             raise ValueError("Flag key already exists in this organization") from exc
 
-        db.refresh(flag)
+        FlagRepository.refresh(db, flag)
         return flag
 
     @staticmethod
@@ -142,8 +127,8 @@ class FlagService:
             before=before,
             after=FlagService._config_snapshot(config),
         )
-        db.commit()
-        db.refresh(flag)
+        FlagRepository.commit(db)
+        FlagRepository.refresh(db, flag)
         FlagService._after_config_update(flag, config)
         return flag
 
@@ -170,8 +155,8 @@ class FlagService:
             before=before,
             after=FlagService._config_snapshot(config),
         )
-        db.commit()
-        db.refresh(flag)
+        FlagRepository.commit(db)
+        FlagRepository.refresh(db, flag)
         FlagService._after_config_update(flag, config)
         return flag
 
@@ -211,8 +196,8 @@ class FlagService:
             before=before,
             after=FlagService._config_snapshot(config),
         )
-        db.commit()
-        db.refresh(flag)
+        FlagRepository.commit(db)
+        FlagRepository.refresh(db, flag)
         FlagService._after_config_update(flag, config)
         return flag
 
@@ -223,33 +208,19 @@ class FlagService:
         if environment not in ENVIRONMENTS:
             raise ValueError("Invalid environment")
 
-        flag = db.scalar(
-            select(Flag)
-            .options(joinedload(Flag.project))
-            .where(Flag.id == flag_id)
-        )
+        flag = FlagRepository.get(db, flag_id)
         if flag is None:
             raise LookupError("Flag not found")
 
         FlagService._require_member(db, user, flag.project.organization_id)
-        config = db.scalar(
-            select(FlagEnvironmentConfig).where(
-                FlagEnvironmentConfig.flag_id == flag_id,
-                FlagEnvironmentConfig.environment == environment,
-            )
-        )
+        config = FlagRepository.get_config(db, flag_id, environment)
         if config is None:
             raise LookupError("Flag environment configuration not found")
         return flag, config
 
     @staticmethod
     def _require_member(db: Session, user: User, organization_id: UUID) -> Membership:
-        membership = db.scalar(
-            select(Membership).where(
-                Membership.user_id == user.id,
-                Membership.organization_id == organization_id,
-            )
-        )
+        membership = OrgRepository.get_membership(db, user.id, organization_id)
         if membership is None:
             raise PermissionError("User is not a member of this organization")
         return membership

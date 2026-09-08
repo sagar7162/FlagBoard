@@ -3,11 +3,12 @@
 import re
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Membership, Organization, Project, User
+from app.repositories.org_repository import OrgRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas import MemberInvite, OrganizationCreate, ProjectCreate
 
 
@@ -18,14 +19,7 @@ class OrgService:
     def list_organizations(db: Session, user: User) -> list[Organization]:
         """Return organizations where the user has a membership."""
 
-        return list(
-            db.scalars(
-                select(Organization)
-                .join(Membership)
-                .where(Membership.user_id == user.id)
-                .order_by(Organization.name)
-            ).all()
-        )
+        return OrgRepository.list_organizations(db, user.id)
 
     @staticmethod
     def create_organization(
@@ -38,27 +32,22 @@ class OrgService:
             raise ValueError("Organization name cannot be empty")
 
         slug = OrgService._slugify(name)
-        if db.scalar(select(Organization).where(Organization.slug == slug)) is not None:
+        if OrgRepository.get_by_slug(db, slug) is not None:
             raise ValueError("Organization slug already exists")
 
         organization = Organization(name=name, slug=slug)
-        db.add(organization)
+        membership = Membership(
+            user_id=user.id,
+            organization_id=organization.id,
+            role="owner",
+        )
 
         try:
-            db.flush()
-            db.add(
-                Membership(
-                    user_id=user.id,
-                    organization_id=organization.id,
-                    role="owner",
-                )
-            )
-            db.commit()
+            OrgRepository.save_organization(db, organization, membership)
         except IntegrityError as exc:
-            db.rollback()
+            OrgRepository.rollback(db)
             raise ValueError("Organization slug already exists") from exc
 
-        db.refresh(organization)
         return organization
 
     @staticmethod
@@ -72,15 +61,12 @@ class OrgService:
 
         OrgService._require_owner(db, actor, organization_id)
         email = invite.email.strip().lower()
-        invited_user = db.scalar(select(User).where(User.email == email))
+        invited_user = UserRepository.get_by_email(db, email)
         if invited_user is None:
             raise LookupError("User not found")
 
-        existing_membership = db.scalar(
-            select(Membership).where(
-                Membership.user_id == invited_user.id,
-                Membership.organization_id == organization_id,
-            )
+        existing_membership = OrgRepository.get_membership(
+            db, invited_user.id, organization_id
         )
         if existing_membership is not None:
             raise ValueError("User is already a member of this organization")
@@ -90,15 +76,12 @@ class OrgService:
             organization_id=organization_id,
             role=invite.role,
         )
-        db.add(membership)
-
         try:
-            db.commit()
+            OrgRepository.save_membership(db, membership)
         except IntegrityError as exc:
-            db.rollback()
+            OrgRepository.rollback(db)
             raise ValueError("User is already a member of this organization") from exc
 
-        db.refresh(membership)
         return membership
 
     @staticmethod
@@ -116,12 +99,7 @@ class OrgService:
         if not name or not key:
             raise ValueError("Project name and key cannot be empty")
 
-        existing_project = db.scalar(
-            select(Project).where(
-                Project.organization_id == organization_id,
-                Project.key == key,
-            )
-        )
+        existing_project = OrgRepository.get_project_by_key(db, organization_id, key)
         if existing_project is not None:
             raise ValueError("Project key already exists in this organization")
 
@@ -130,15 +108,12 @@ class OrgService:
             name=name,
             key=key,
         )
-        db.add(project)
-
         try:
-            db.commit()
+            OrgRepository.save_project(db, project)
         except IntegrityError as exc:
-            db.rollback()
+            OrgRepository.rollback(db)
             raise ValueError("Project key already exists in this organization") from exc
 
-        db.refresh(project)
         return project
 
     @staticmethod
@@ -148,22 +123,11 @@ class OrgService:
         """Return projects visible to a member of an organization."""
 
         OrgService._require_member(db, actor, organization_id)
-        return list(
-            db.scalars(
-                select(Project)
-                .where(Project.organization_id == organization_id)
-                .order_by(Project.name)
-            ).all()
-        )
+        return OrgRepository.list_projects(db, organization_id)
 
     @staticmethod
     def _require_member(db: Session, user: User, organization_id: UUID) -> Membership:
-        membership = db.scalar(
-            select(Membership).where(
-                Membership.user_id == user.id,
-                Membership.organization_id == organization_id,
-            )
-        )
+        membership = OrgRepository.get_membership(db, user.id, organization_id)
         if membership is None:
             raise PermissionError("User is not a member of this organization")
         return membership
