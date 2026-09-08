@@ -1,4 +1,4 @@
-"""Small in-process TTL cache for compiled flag configurations."""
+"""Small in-process TTL cache for evaluation data and API-key lookups."""
 
 import time
 from dataclasses import dataclass
@@ -19,7 +19,7 @@ class CachedFlag:
 
 
 class SimpleTTLCache:
-    """Cache flag configurations for one application process.
+    """Cache evaluation data for one application process.
 
     This cache assumes a single application process owns the dictionary. It is
     intentionally in-memory; a shared cache such as Redis can replace it if

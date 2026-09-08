@@ -43,11 +43,7 @@ def upgrade() -> None:
         ["id"],
     )
 
-    bind = op.get_bind()
-    inspector = sa.inspect(bind)
-    for constraint in inspector.get_unique_constraints("flag"):
-        if constraint.get("column_names") == ["project_id", "key"]:
-            op.drop_constraint(constraint["name"], "flag", type_="unique")
+    op.drop_constraint("flag_project_id_key_key", "flag", type_="unique")
 
     op.create_unique_constraint(
         "uq_flag_organization_key", "flag", ["organization_id", "key"]

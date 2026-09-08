@@ -165,6 +165,20 @@ class FlagResponse(BaseModel):
 
     id: UUID
     project_id: UUID
+    key: str
+    name: str
+    created_at: datetime
+    environments: list[EnvironmentConfigResponse] = Field(
+        validation_alias="environment_configs"
+    )
+
+
+class AuditLogResponse(BaseModel):
+    """A flag mutation entry returned by the API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
     organization_id: UUID
     flag_id: UUID
     actor_user_id: UUID

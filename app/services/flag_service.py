@@ -105,6 +105,7 @@ class FlagService:
             raise ValueError("Flag key already exists in this organization") from exc
 
         FlagRepository.refresh(db, flag)
+        FlagService._broadcast_update(flag, configs[0])
         return flag
 
     @staticmethod
