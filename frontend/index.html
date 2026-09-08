@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FlagBoard — Feature control center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="login-view" class="login-shell">
+      <section class="login-panel">
+        <div class="brand-mark">F</div>
+        <p class="eyebrow">FLAGBOARD / CONTROL PLANE</p>
+        <h1>Ship with<br /><span>confidence.</span></h1>
+        <p class="login-intro">Manage feature flags across every environment, with changes that stay visible to your whole team.</p>
+        <form id="login-form" class="login-form">
+          <label for="email">Email address</label>
+          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required />
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required />
+          <button class="button button-primary" type="submit">Sign in <span aria-hidden="true">→</span></button>
+          <p id="login-error" class="form-error" role="alert"></p>
+        </form>
+        <p class="login-footnote">Your workspace, in one clear view.</p>
+      </section>
+      <aside class="login-aside" aria-label="Product summary">
+        <div class="aside-top"><span class="status-dot"></span> Systems operational</div>
+        <div class="aside-bottom">
+          <span>01</span>
+          <p>One place to see what is live, where it is live, and who changed it.</p>
+        </div>
+      </aside>
+    </main>
+
+    <main id="dashboard-view" class="dashboard-shell is-hidden">
+      <header class="topbar">
+        <a class="wordmark" href="#">FLAG<span>BOARD</span></a>
+        <div class="topbar-right">
+          <div class="connection-state"><span id="connection-dot" class="status-dot"></span><span id="connection-label">Not connected</span></div>
+          <span id="user-email" class="user-email"></span>
+          <button id="logout-button" class="button button-quiet" type="button">Log out</button>
+        </div>
+      </header>
+
+      <div class="dashboard-body">
+        <aside class="sidebar">
+          <div class="sidebar-heading"><span>Workspace</span><button class="icon-button" type="button" title="Create organization" aria-label="Create organization">+</button></div>
+          <nav id="org-list" class="org-list" aria-label="Organizations"></nav>
+          <div class="sidebar-footer"><span class="sidebar-label">Signed in as</span><span id="sidebar-email"></span></div>
+        </aside>
+
+        <section class="content">
+          <div class="page-heading">
+            <div><p class="eyebrow">CONTROL CENTER</p><h2 id="org-name">Loading workspace</h2><p id="project-context" class="subtle">Select a project to manage its flags.</p></div>
+            <div class="environment-picker"><label for="environment">Environment</label><select id="environment"><option value="development">Development</option><option value="staging">Staging</option><option value="production" selected>Production</option></select></div>
+          </div>
+
+          <div class="project-tabs" id="project-list" aria-label="Projects"></div>
+
+          <div class="section-heading"><div><p class="eyebrow">FEATURE FLAGS</p><h3>Release controls</h3></div><span id="flag-count" class="count-label">—</span></div>
+          <div id="flag-list" class="flag-list"><div class="empty-state">Loading flags…</div></div>
+
+          <div class="audit-section">
+            <div class="section-heading"><div><p class="eyebrow">AUDIT LOG</p><h3>Recent activity</h3></div><span class="live-pill"><span class="status-dot"></span> Live updates</span></div>
+            <div class="audit-table-wrap"><table class="audit-table"><thead><tr><th>Change</th><th>Flag</th><th>Actor</th><th>Time</th><th>Details</th></tr></thead><tbody id="audit-list"><tr><td colspan="5" class="table-empty">Select a flag to view its audit history.</td></tr></tbody></table></div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>
