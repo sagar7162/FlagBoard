@@ -1,8 +1,21 @@
 """Small in-process TTL cache for compiled flag configurations."""
 
 import time
+from dataclasses import dataclass
+from uuid import UUID
 
-from app.engine.evaluator import FlagConfig
+from app.config import settings
+
+
+@dataclass(frozen=True)
+class CachedFlag:
+    """The flag fields needed to build an evaluation configuration."""
+
+    id: UUID
+    organization_id: UUID
+    key: str
+    on_value: bool
+    off_value: bool
 
 
 class SimpleTTLCache:
@@ -17,9 +30,9 @@ class SimpleTTLCache:
         if ttl_seconds < 0:
             raise ValueError("TTL must be non-negative")
         self.ttl_seconds = ttl_seconds
-        self._store: dict[str, tuple[float, FlagConfig]] = {}
+        self._store: dict[str, tuple[float, object]] = {}
 
-    def get(self, key: str) -> FlagConfig | None:
+    def get(self, key: str) -> object | None:
         """Return a cached configuration, or ``None`` on a miss/expiry."""
 
         entry = self._store.get(key)
@@ -33,7 +46,7 @@ class SimpleTTLCache:
 
         return value
 
-    def set(self, key: str, value: FlagConfig) -> None:
+    def set(self, key: str, value: object) -> None:
         """Store a configuration until the cache entry's TTL expires."""
 
         self._store[key] = (time.monotonic() + self.ttl_seconds, value)
@@ -44,4 +57,22 @@ class SimpleTTLCache:
         self._store.pop(key, None)
 
 
-cache = SimpleTTLCache()
+cache = SimpleTTLCache(settings.cache_ttl_seconds)
+
+
+def flag_lookup_cache_key(organization_id: UUID, flag_key: str) -> str:
+    """Return the cache key for an organization-scoped flag lookup."""
+
+    return f"flag-lookup:{organization_id}:{flag_key}"
+
+
+def flag_config_cache_key(flag_id: UUID, environment: str) -> str:
+    """Return the cache key for one flag environment configuration."""
+
+    return f"flag-config:{flag_id}:{environment}"
+
+
+def api_key_cache_key(hashed_key: str) -> str:
+    """Return the cache key for an API-key authentication lookup."""
+
+    return f"api-key:{hashed_key}"

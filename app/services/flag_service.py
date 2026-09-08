@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.cache import cache
+from app.cache import cache, flag_config_cache_key, flag_lookup_cache_key
 from app.realtime import connection_manager
 from app.models import (
     Flag,
@@ -258,12 +258,13 @@ class FlagService:
     ) -> None:
         """Placeholder for Phase 3 cache invalidation and Phase 4 broadcast."""
 
-        FlagService._invalidate_cache(flag.id, config.environment)
+        FlagService._invalidate_cache(flag, config.environment)
         FlagService._broadcast_update(flag, config)
 
     @staticmethod
-    def _invalidate_cache(flag_id: UUID, environment: str) -> None:
-        cache.invalidate(f"{flag_id}:{environment}")
+    def _invalidate_cache(flag: Flag, environment: str) -> None:
+        cache.invalidate(flag_config_cache_key(flag.id, environment))
+        cache.invalidate(flag_lookup_cache_key(flag.organization_id, flag.key))
 
     @staticmethod
     def _broadcast_update(flag: Flag, config: FlagEnvironmentConfig) -> None:

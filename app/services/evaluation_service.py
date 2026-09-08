@@ -2,14 +2,20 @@
 
 from sqlalchemy.orm import Session
 
-from app.cache import SimpleTTLCache, cache
+from app.cache import (
+    CachedFlag,
+    SimpleTTLCache,
+    cache,
+    flag_config_cache_key,
+    flag_lookup_cache_key,
+)
 from app.engine.evaluator import (
     EvalUser,
     EvaluationEngine,
     FlagConfig,
     TargetingRule,
 )
-from app.models import ApiKey, Flag, FlagEnvironmentConfig
+from app.models import ApiKey, FlagEnvironmentConfig
 from app.repositories.evaluation_repository import EvaluationRepository
 from app.repositories.flag_repository import FlagRepository
 from app.schemas import EvaluationResponse, EvaluationUser
@@ -28,28 +34,48 @@ class EvaluationService:
     ) -> EvaluationResponse:
         """Evaluate a flag for the API key's organization and environment."""
 
-        flag = FlagRepository.get_by_organization_and_key(
-            db, api_key.organization_id, flag_key
-        )
-        if flag is None:
+        lookup_key = flag_lookup_cache_key(api_key.organization_id, flag_key)
+        cached_flag = cache_store.get(lookup_key)
+        if cached_flag is None:
+            flag = FlagRepository.get_by_organization_and_key(
+                db, api_key.organization_id, flag_key
+            )
+            if flag is None:
+                return EvaluationResponse(
+                    flag_key=flag_key, value=False, reason="not_found"
+                )
+            cached_flag = CachedFlag(
+                id=flag.id,
+                organization_id=flag.organization_id,
+                key=flag.key,
+                on_value=flag.on_value,
+                off_value=flag.off_value,
+            )
+            cache_store.set(lookup_key, cached_flag)
+
+        if not isinstance(cached_flag, CachedFlag):
             return EvaluationResponse(flag_key=flag_key, value=False, reason="not_found")
 
-        cache_key = f"{flag.id}:{api_key.environment}"
+        cache_key = flag_config_cache_key(cached_flag.id, api_key.environment)
         flag_config = cache_store.get(cache_key)
         if flag_config is None:
             config = EvaluationRepository.get_config(
-                db, flag.id, api_key.environment
+                db, cached_flag.id, api_key.environment
             )
             if config is None:
                 return EvaluationResponse(
-                    flag_key=flag_key, value=flag.off_value, reason="not_found"
+                    flag_key=flag_key,
+                    value=cached_flag.off_value,
+                    reason="not_found",
                 )
 
             try:
-                flag_config = EvaluationService._to_flag_config(flag, config)
+                flag_config = EvaluationService._to_flag_config(cached_flag, config)
             except (AttributeError, TypeError, ValueError):
                 return EvaluationResponse(
-                    flag_key=flag_key, value=flag.off_value, reason="evaluation_error"
+                    flag_key=flag_key,
+                    value=cached_flag.off_value,
+                    reason="evaluation_error",
                 )
             cache_store.set(cache_key, flag_config)
 
@@ -60,7 +86,9 @@ class EvaluationService:
             )
         except (AttributeError, TypeError, ValueError):
             return EvaluationResponse(
-                flag_key=flag_key, value=flag.off_value, reason="evaluation_error"
+                flag_key=flag_key,
+                value=cached_flag.off_value,
+                reason="evaluation_error",
             )
 
         return EvaluationResponse(
@@ -71,7 +99,7 @@ class EvaluationService:
 
     @staticmethod
     def _to_flag_config(
-        flag: Flag, config: FlagEnvironmentConfig
+        flag: CachedFlag, config: FlagEnvironmentConfig
     ) -> FlagConfig:
         rule = None
         rule_values = (

@@ -11,6 +11,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.auth.security import verify_access_token
+from app.cache import api_key_cache_key, cache
 from app.config import settings
 from app.database import get_db
 from app.models import ApiKey, User
@@ -76,9 +77,14 @@ def get_api_key_context(
     if scheme.lower() != "apikey" or not raw_key.strip():
         raise _api_key_unauthorized()
 
-    api_key = ApiKeyRepository.get_active_by_hash(
-        db, hash_api_key(raw_key.strip())
-    )
+    hashed_key = hash_api_key(raw_key.strip())
+    cached_api_key = cache.get(api_key_cache_key(hashed_key))
+    if isinstance(cached_api_key, ApiKey):
+        api_key = cached_api_key
+    else:
+        api_key = ApiKeyRepository.get_active_by_hash(db, hashed_key)
+        if api_key is not None:
+            cache.set(api_key_cache_key(hashed_key), api_key)
     if api_key is None:
         raise _api_key_unauthorized()
 

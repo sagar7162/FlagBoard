@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import hash_api_key
+from app.cache import api_key_cache_key, cache
 from app.models import ApiKey, Membership, User
 from app.repositories.api_key_repository import ApiKeyRepository
 from app.repositories.org_repository import OrgRepository
@@ -55,8 +56,10 @@ class ApiKeyService:
             raise LookupError("API key not found")
 
         if api_key.revoked_at is None:
+            hashed_key = api_key.hashed_key
             api_key.revoked_at = datetime.now(timezone.utc)
             ApiKeyRepository.commit(db)
+            cache.invalidate(api_key_cache_key(hashed_key))
 
     @staticmethod
     def _require_member(db: Session, user: User, organization_id: UUID) -> Membership:
