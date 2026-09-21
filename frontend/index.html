@@ -14,7 +14,7 @@
       <section class="login-panel">
         <div class="brand-mark">F</div>
         <p class="eyebrow">FLAGBOARD / CONTROL PLANE</p>
-        <h1>Ship with<br /><span>confidence.</span></h1>
+        <h1 id="auth-title">Ship with<br /><span>confidence.</span></h1>
         <p class="login-intro">Manage feature flags across every environment, with changes that stay visible to your whole team.</p>
         <form id="login-form" class="login-form">
           <label for="email">Email address</label>
@@ -24,6 +24,7 @@
           <button class="button button-primary" type="submit">Sign in <span aria-hidden="true">→</span></button>
           <p id="login-error" class="form-error" role="alert"></p>
         </form>
+        <button id="auth-switch" class="text-button" type="button">Need an account? Sign up</button>
         <p class="login-footnote">Your workspace, in one clear view.</p>
       </section>
       <aside class="login-aside" aria-label="Product summary">
@@ -39,7 +40,7 @@
       <header class="topbar">
         <a class="wordmark" href="#">FLAG<span>BOARD</span></a>
         <div class="topbar-right">
-          <div class="connection-state"><span id="connection-dot" class="status-dot"></span><span id="connection-label">Not connected</span></div>
+          <div class="connection-state" title="Live sync uses the dashboard WebSocket endpoint."><span id="connection-dot" class="status-dot"></span><span id="connection-label">Live sync: connecting…</span></div>
           <span id="user-email" class="user-email"></span>
           <button id="logout-button" class="button button-quiet" type="button">Log out</button>
         </div>
@@ -47,7 +48,7 @@
 
       <div class="dashboard-body">
         <aside class="sidebar">
-          <div class="sidebar-heading"><span>Workspace</span><button class="icon-button" type="button" title="Create organization" aria-label="Create organization">+</button></div>
+          <div class="sidebar-heading"><span>Workspace</span><button id="create-org-button" class="icon-button" type="button" title="Create organization" aria-label="Create organization">+</button></div>
           <nav id="org-list" class="org-list" aria-label="Organizations"></nav>
           <div class="sidebar-footer"><span class="sidebar-label">Signed in as</span><span id="sidebar-email"></span></div>
         </aside>
@@ -58,10 +59,12 @@
             <div class="environment-picker"><label for="environment">Environment</label><select id="environment"><option value="development">Development</option><option value="staging">Staging</option><option value="production" selected>Production</option></select></div>
           </div>
 
-          <div class="project-tabs" id="project-list" aria-label="Projects"></div>
+          <div class="project-tabs-row"><div class="project-tabs" id="project-list" aria-label="Projects"></div><button id="create-project-button" class="small-action" type="button">+ Project</button></div>
 
-          <div class="section-heading"><div><p class="eyebrow">FEATURE FLAGS</p><h3>Release controls</h3></div><span id="flag-count" class="count-label">—</span></div>
+          <div class="section-heading"><div><p class="eyebrow">FEATURE FLAGS</p><h3>Release controls</h3></div><div class="section-actions"><span id="flag-count" class="count-label">—</span><button id="create-flag-button" class="small-action" type="button">+ Flag</button></div></div>
           <div id="flag-list" class="flag-list"><div class="empty-state">Loading flags…</div></div>
+
+          <div class="management-actions"><button id="members-button" class="button button-quiet" type="button">Members</button><button id="keys-button" class="button button-quiet" type="button">API keys</button><button id="evaluate-button" class="button button-quiet" type="button">Evaluate flag</button></div>
 
           <div class="audit-section">
             <div class="section-heading"><div><p class="eyebrow">AUDIT LOG</p><h3>Recent activity</h3></div><span class="live-pill"><span class="status-dot"></span> Live updates</span></div>
@@ -70,6 +73,18 @@
         </section>
       </div>
     </main>
+    <div id="modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-card"><div class="modal-header"><div><p class="eyebrow">WORKSPACE TOOLS</p><h2 id="modal-title">Manage</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Close">×</button></div><div id="modal-content"></div></div>
+    </div>
+    <div id="org-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="org-modal-title">
+      <form id="org-form" class="modal-card">
+        <div class="modal-header"><div><p class="eyebrow">NEW WORKSPACE</p><h2 id="org-modal-title">Create organization</h2></div><button id="close-org-modal" class="icon-button" type="button" aria-label="Close">×</button></div>
+        <label for="org-name-input">Organization name</label>
+        <input id="org-name-input" type="text" placeholder="Acme Inc." required />
+        <p id="org-error" class="form-error" role="alert"></p>
+        <div class="modal-actions"><button id="cancel-org-modal" class="button button-quiet" type="button">Cancel</button><button class="button button-primary" type="submit">Create organization <span aria-hidden="true">→</span></button></div>
+      </form>
+    </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="./app.js"></script>
   </body>
