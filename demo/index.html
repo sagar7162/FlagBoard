@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Northstar — Checkout preview</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#"><span class="brand-mark">N</span> northstar</a>
+      <div class="header-note"><span class="pulse"></span> Live product preview</div>
+    </header>
+    <main>
+      <section class="hero">
+        <div><p class="eyebrow">STOREFRONT / CHECKOUT</p><h1>Buy the things<br /><em>you love.</em></h1><p class="hero-copy">This is a real customer-facing preview. The checkout experience below is controlled by a FlagBoard feature flag.</p></div>
+        <div class="hero-card"><span class="card-label">Your cart</span><strong>Everyday carry set</strong><span class="muted">1 × ₹2,499</span><div class="cart-total"><span>Total</span><strong>₹2,499</strong></div></div>
+      </section>
+      <section class="demo-grid">
+        <div class="checkout-card" id="checkout-card">
+          <div class="checkout-top"><span class="eyebrow">CHECKOUT</span><span id="experience-badge" class="experience-badge">Checking…</span></div>
+          <div id="checkout-content"></div>
+          <div class="customer-row"><span class="muted">Previewing as</span><div class="plan-picker" role="group" aria-label="Customer plan"><button type="button" data-plan="pro" class="plan-button active">Pro customer</button><button type="button" data-plan="free" class="plan-button">Free customer</button></div></div>
+        </div>
+        <aside class="control-card"><p class="eyebrow">DEMO CONNECTION</p><h2>Watch the product respond.</h2><p class="muted">Toggle the flag in the FlagBoard dashboard. This storefront checks the same flag automatically and updates the checkout when its value changes.</p><form id="connection-form"><label for="api-key">Production evaluation key</label><input id="api-key" name="api-key" type="password" placeholder="Paste the raw API key once" autocomplete="off" required /><label for="flag-key">Flag key</label><input id="flag-key" name="flag-key" value="new_checkout_flow" required /><button class="primary-button" type="submit">Connect storefront <span>→</span></button></form><p id="connection-message" class="connection-message">Connect a key to start the preview.</p><a class="dashboard-link" href="http://localhost:5500" target="_blank" rel="noreferrer">Open FlagBoard dashboard ↗</a></aside>
+      </section>
+      <section class="explain-strip"><div><span class="step-number">01</span><strong>Change the flag</strong><span>in the control center</span></div><div class="arrow">→</div><div><span class="step-number">02</span><strong>FlagBoard evaluates</strong><span>this customer and environment</span></div><div class="arrow">→</div><div><span class="step-number">03</span><strong>The experience changes</strong><span>for the customer</span></div></section>
+    </main>
+    <footer><span>Northstar storefront preview</span><span id="last-checked">Not connected</span></footer>
+    <script src="./app.js"></script>
+  </body>
+</html>
