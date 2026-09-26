@@ -137,4 +137,4 @@ def test_flag_key_is_unique_across_projects_in_one_organization(client: TestClie
         json={"user": {"key": "user-123"}},
     )
     assert evaluation.status_code == 200, evaluation.text
-    assert evaluation.json()["reason"] == "default_on"
+    assert evaluation.json()["reason"] == "flag_disabled"
