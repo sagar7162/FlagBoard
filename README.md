@@ -1003,7 +1003,6 @@ The JWT is passed as the `token` query parameter because browsers do not provide
 
 ```text
 .
-├── PROJECT_BLUEPRINT.md             # Source-of-truth design document
 ├── README.md                        # This guide
 ├── requirements.txt                 # Python dependencies
 ├── alembic.ini                      # Migration configuration
